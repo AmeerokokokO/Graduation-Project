@@ -1,0 +1,8 @@
+python detect_corners.py --input_type=1 --camera=0 اشغل الكامرة مال الحاسبة
+python detect_corners.py --input_type=0 --img_path=imgs/img2.png --save=True --output=output اذا صورة وحدة اني احدده
+python detect_corners.py --input_type=2 --folder_path=images --save=True --output=output مجلد كامل للصور
+
+
+python detect_corners.py --input_type=2 --folder_path=imges7 --save=True --output=output7 مجلد كامل
+python detect_corners.py --input_type=0 --img_path=imges/img2.png --save=True --output=output  صورة وحدة
+python detect_corners.py --input_type=1 --camera=0 اشغل الكاميرا

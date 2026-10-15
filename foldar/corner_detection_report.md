@@ -1,0 +1,1005 @@
+# تقرير شامل عن خوارزميات كشف الزوايا (Corner Detection)
+
+## المحتويات
+1. [نظرة عامة](#نظرة-عامة)
+2. [الخوارزميات المستخدمة](#الخوارزميات-المستخدمة)
+3. [خوارزمية Harris Corner Detection](#خوارزمية-harris-corner-detection)
+4. [خوارزمية Shi-Tomasi](#خوارزمية-shi-tomasi)
+5. [المقارنة بين الخوارزميتين](#المقارنة-بين-الخوارزميتين)
+6. [التعامل مع الصور الملونة والأبيض والأسود](#التعامل-مع-الصور-الملونة-والأبيض-والأسود)
+7. [تحسينات الإضاءة](#تحسينات-الإضاءة)
+8. [شرح الكود التفصيلي](#شرح-الكود-التفصيلي)
+
+---
+
+## نظرة عامة
+
+### ما هو كشف الزوايا (Corner Detection)؟
+كشف الزوايا هو تقنية في معالجة الصور تهدف إلى **تحديد النقاط المميزة** في الصورة التي تمثل زوايا أو حواف حادة. هذه النقاط مهمة جداً في:
+- **التعرف على الأشكال والأنماط**
+- **التتبع في الفيديو (Object Tracking)**
+- **الرؤية الحاسوبية ثلاثية الأبعاد (3D Reconstruction)**
+- **تطابق الصور (Image Matching)**
+- **الواقع المعزز (AR)**
+
+### ما هي الزاوية (Corner)؟
+الزاوية هي نقطة في الصورة حيث يتقاطع **حافتان** أو أكثر، أو نقطة فيها **تغير حاد في الاتجاه**. الزوايا تتميز بأنها:
+- **مميزة**: يمكن تمييزها بسهولة عن باقي البكسلات
+- **ثابتة**: تبقى ثابتة حتى مع تغيير زاوية الرؤية قليلاً
+- **قابلة للتكرار**: يمكن اكتشافها مرة أخرى في صور مختلفة
+
+---
+
+## الخوارزميات المستخدمة
+
+المشروع يستخدم خوارزميتين رئيسيتين:
+
+### 1. Harris Corner Detection
+- **المطور**: Chris Harris & Mike Stephens (1988)
+- **المبدأ**: حساب تغيرات الشدة في جميع الاتجاهات
+
+### 2. Shi-Tomasi Corner Detection
+- **المطور**: Jianbo Shi & Carlo Tomasi (1994)
+- **المبدأ**: تحسين لخوارزمية Harris تركز على أفضل الزوايا
+
+---
+
+## خوارزمية Harris Corner Detection
+
+### المبدأ الرياضي
+
+تعتمد خوارزمية Harris على حساب **استجابة الزاوية** لكل بكسل في الصورة باستخدام المعادلة التالية:
+
+```
+R = det(M) - k × trace(M)²
+```
+
+حيث:
+- **M**: مصفوفة الـ Structure Tensor (حجم 2×2)
+- **det(M)**: محدد المصفوفة = λ₁ × λ₂
+- **trace(M)**: أثر المصفوفة = λ₁ + λ₂
+- **k**: ثابت Harris (عادة 0.04 - 0.06)
+- **λ₁, λ₂**: القيم الذاتية للمصفوفة M
+
+### كيف تعمل؟
+
+1. **حساب المشتقات**:
+   - تُحسب المشتقة الأفقية Ix باستخدام فلتر Sobel
+   - تُحسب المشتقة العمودية Iy باستخدام فلتر Sobel
+
+2. **بناء مصفوفة M** لكل بكسل:
+   ```
+   M = [ Σ(Ix²)    Σ(Ix·Iy) ]
+       [ Σ(Ix·Iy)  Σ(Iy²)   ]
+   ```
+   حيث Σ تعني المجموع داخل نافذة (window) حول البكسل
+
+3. **حساب استجابة Harris (R)**:
+   - إذا كانت R > عتبة معينة → الزاوية موجودة
+   - إذا كانت R صغيرة → منطقة مسطحة
+   - إذا كانت R سالبة → حافة (edge)
+
+### المعاملات الرئيسية
+
+```python
+harris_corners(
+    image,
+    block_size=20,      # حجم النافذة لحساب المشتقات
+    ksize=3,           # حجم فلتر Sobel (3, 5, 7)
+    k=0.04,            # ثابت Harris
+    thresh=0.01,       # نسبة العتبة (1% من أعلى قيمة)
+    dilate_iter=1,     # عدد مرات التوسيع
+    colormap=cv2.COLORMAP_TURBO  # نوع الخريطة الحرارية
+)
+```
+
+### المميزات ✅
+
+1. **دقة عالية** في اكتشاف الزوايا الحقيقية
+2. **ثبات** نسبي ضد التدوير
+3. **خريطة حرارية (Heatmap)** توضح شدة استجابة كل بكسل
+4. **مرونة في التخصيص** عبر المعاملات المختلفة
+5. **تعمل في الوقت الفعلي** مع الكاميرا
+
+### العيوب ❌
+
+1. **حساسة لتغير المقياس (Scale)**: لا تعمل جيداً عند تكبير/تصغير الصورة
+2. **حساسة للضوضاء**: تحتاج معالجة مسبقة للصور ذات الجودة المنخفضة
+3. **بطيئة نسبياً** مقارنة بخوارزميات FAST
+4. **تحتاج ضبط دقيق** للمعاملات حسب نوع الصورة
+5. **قد تكتشف زوايا كاذبة** في المناطق ذات النسيج العالي
+
+---
+
+## خوارزمية Shi-Tomasi
+
+### المبدأ الرياضي
+
+خوارزمية Shi-Tomasi هي **تحسين** لخوارزمية Harris، وتستخدم معيار أبسط:
+
+```
+R = min(λ₁, λ₂)
+```
+
+بدلاً من:
+```
+R = det(M) - k × trace(M)²
+```
+
+### الفرق الجوهري
+
+Harris تستخدم دالة معقدة تحتوي على ثابت k، بينما Shi-Tomasi تستخدم **أصغر قيمة ذاتية** مباشرة، مما يجعلها:
+- **أبسط رياضياً**
+- **أكثر موثوقية** في اختيار الزوايا القوية
+- **لا تحتاج ضبط الثابت k**
+
+### كيف تعمل؟
+
+1. **تحويل الصورة إلى Grayscale**
+2. **تطبيق CLAHE** لتحسين التباين
+3. **استخدام `goodFeaturesToTrack`**:
+   ```python
+   corners = cv2.goodFeaturesToTrack(
+       gray,
+       maxCorners=700,        # أقصى عدد زوايا
+       qualityLevel=0.01,     # جودة أقل زاوية = 1% من أفضل زاوية
+       minDistance=10,        # أقل مسافة بين زاويتين
+       blockSize=4           # حجم النافذة
+   )
+   ```
+
+### المعاملات الرئيسية
+
+```python
+shi_tomasi(
+    image,
+    max_corners=700,        # أقصى عدد زوايا
+    quality_level=0.01,     # جودة الزاوية (0.01 = 1%)
+    min_distance=10,        # المسافة الدنيا بين الزوايا
+    block_size=4,          # حجم النافذة
+    radius=10,             # نصف قطر الدائرة المرسومة
+    color=(0, 255, 255)    # لون الزوايا (أصفر)
+)
+```
+
+### المميزات ✅
+
+1. **أفضل في التتبع (Tracking)**: صُممت خصيصاً لتتبع الأشياء
+2. **تختار أفضل الزوايا** فقط بناءً على معيار واضح
+3. **أسرع** من Harris لأن الحسابات أبسط
+4. **لا تحتاج ضبط k**: معامل أقل يجب ضبطه
+5. **نتائج أكثر استقراراً** في التطبيقات الديناميكية
+6. **تستخدم في OpenCV Tracking APIs**
+
+### العيوب ❌
+
+1. **محدودة بعدد معين من الزوايا**: يجب تحديد `maxCorners` مسبقاً
+2. **لا توفر خريطة حرارية**: فقط نقاط منفصلة
+3. **حساسة للإضاءة**: بدون CLAHE قد تفشل في الصور الداكنة
+4. **قد تتجاهل زوايا ضعيفة** لكنها مهمة في بعض التطبيقات
+5. **حساسة لتغير المقياس** مثل Harris
+
+---
+
+## المقارنة بين الخوارزميتين
+
+### جدول المقارنة
+
+| **المعيار** | **Harris** | **Shi-Tomasi** |
+|-------------|-----------|----------------|
+| **السرعة** | متوسطة | أسرع |
+| **الدقة** | عالية | عالية جداً |
+| **الاستخدام الأمثل** | التعرف على الأنماط | تتبع الأشياء |
+| **عدد المعاملات ة للضبط** | أكثر (k, block, ksize) | أقل |
+| **الخريطة الحرارية** | ✅ نعم | ❌ لا |
+| **عدد الزوايا** | غير محدود | محدود بـ maxCorners |
+| **الموثوقية** | جيدة | ممتازة |
+| **التعقيد الحسابي** | O(n²) | O(n²) لكن أبسط |
+
+### متى تستخدم كل واحدة؟
+
+#### استخدم Harris عندما:
+- تحتاج **فهم كثافة الزوايا** في المنطقة
+- تريد **تصوير حراري** للاستجابة
+- تحتاج **مرونة** في ضبط حساسية الكشف
+- تعمل على **صور ثابتة**
+
+#### استخدم Shi-Tomasi عندما:
+- تعمل على **تتبع فيديو**
+- تحتاج **أفضل N زاوية** فقط
+- تريد **سرعة** في المعالجة
+- تحتاج **استقرار** في النتائج
+
+---
+
+## التعامل مع الصور الملونة والأبيض والأسود
+
+### 📸 الصور الملونة (RGB/BGR)
+
+#### المراحل:
+
+1. **قراءة الصورة الملونة**:
+   ```python
+   img = cv2.imread(path)  # بصيغة BGR
+   ```
+
+2. **تحويل إلى Grayscale**:
+   ```python
+   gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+   ```
+   
+   **لماذا؟**
+   - خوارزميات كشف الزوايا تعتمد على **التدرجات (Gradients)**
+   - التدرجات تُحسب من **شدة الإضاءة** وليس اللون
+   - معالجة قناة واحدة **أسرع** من 3 قنوات
+
+3. **تطبيق الخوارزمية على Gray**:
+   ```python
+   corners = cv2.goodFeaturesToTrack(gray, ...)
+   ```
+
+4. **رسم النتائج على الصورة الملونة الأصلية**:
+   ```python
+   cv2.circle(img, (x, y), radius, (0, 255, 255), -1)
+   ```
+   
+   **الفائدة**: نحافظ على **جمالية الصورة الملونة** في المخرجات
+
+### ⚫⚪ الصور الأبيض والأسود (Grayscale)
+
+#### المراحل:
+
+1. **التحقق من نوع الصورة**:
+   ```python
+   if len(img.shape) == 2:  # صورة رمادية
+       gray = img
+   else:  # صورة ملونة
+       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+   ```
+
+2. **تطبيق الخوارزمية مباشرة**:
+   ```python
+   corners = cv2.goodFeaturesToTrack(gray, ...)
+   ```
+
+3. **تحويل Gray إلى BGR للعرض الملون**:
+   ```python
+   display_img = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+   cv2.circle(display_img, (x, y), radius, (0, 255, 255), -1)
+   ```
+
+### 🎨 في الكود الحالي:
+
+```python
+# من ملف corners.py (سطر 44-45)
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+```
+
+**الكود يفترض** أن الصورة دائماً ملونة (BGR). إذا أدخلت صورة رمادية، **سيحدث خطأ**.
+
+#### التحسين المقترح:
+
+```python
+def to_gray(img):
+    """تحويل آمن إلى Grayscale"""
+    if len(img.shape) == 2:
+        # صورة رمادية بالفعل
+        return img
+    elif img.shape[2] == 3:
+        # صورة BGR ملونة
+        return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    elif img.shape[2] == 4:
+        # صورة BGRA (مع قناة Alpha)
+        return cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
+    else:
+        raise ValueError("نوع صورة غير مدعوم")
+```
+
+---
+
+## تحسينات الإضاءة
+
+المشروع يستخدم تقنيتين متقدمتين لتحسين الأداء في ظروف الإضاءة المختلفة:
+
+### 1️⃣ Adaptive Gamma Correction
+
+#### المبدأ:
+تصحيح جاما يُعدّل **سطوع الصورة** بشكل غير خطي.
+
+#### المعادلة:
+```
+Y_corrected = (Y / 255)^γ × 255
+```
+
+حيث:
+- **Y**: قناة الإضاءة
+- **γ (gamma)**: معامل التصحيح
+  - `γ < 1`: تفتيح الصورة (للصور الداكنة)
+  - `γ > 1`: تعتيم الصورة (للصور الساطعة)
+  - `γ = 1`: لا تغيير
+
+#### كيف يعمل في الكود:
+
+```python
+def adaptive_gamma(img):
+    # 1. تحويل إلى YCrCb
+    ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+    y, cr, cb = cv2.split(ycrcb)
+    
+    # 2. حساب متوسط الإضاءة
+    mean = np.mean(y)
+    
+    # 3. حساب gamma تكيفي
+    gamma = 1.5 - (mean / 255.0)
+    gamma = max(0.5, min(gamma, 1.8))  # محصور بين [0.5, 1.8]
+    
+    # 4. تطبيق التصحيح
+    y_corr = ((y / 255.0) ** gamma) * 255.0
+    y_corr = np.clip(y_corr, 0, 255).astype(np.uint8)
+    
+    # 5. إعادة دمج القنوات
+    out = cv2.merge([y_corr, cr, cb])
+    return cv2.cvtColor(out, cv2.COLOR_YCrCb2BGR)
+```
+
+#### الفوائد:
+- **تصحيح تلقائي** للإضاءة
+- **يحسن التباين** في الصور الداكنة
+- **يحافظ على الألوان** (Cr, Cb لا تتغير)
+
+#### العيوب:
+- **قد يزيد الضوضاء** في الصور الداكنة جداً
+- **بطيء نسبياً** لأنه يحول بين فضاءات ألوان مختلفة
+
+---
+
+### 2️⃣ CLAHE (Contrast Limited Adaptive Histogram Equalization)
+
+#### المبدأ:
+CLAHE تُحسّن **التباين المحلي** بتقسيم الصورة إلى شبكة وتطبيق معادلة هيستوجرام على كل منطقة.
+
+#### لماذا CLAHE وليس Histogram Equalization العادي؟
+
+| **Histogram Equalization** | **CLAHE** |
+|---------------------------|-----------|
+| يعمل على الصورة **كاملة** | يعمل على **مناطق صغيرة** |
+| قد **يُفرط في التباين** | **محدود بـ clipLimit** |
+| يفقد التفاصيل المحلية | **يحافظ على التفاصيل** |
+
+#### كيف يعمل في الكود:
+
+```python
+def apply_clahe_rgb(img, clip=3.0, grid=8):
+    # 1. تحويل إلى LAB (فضاء لوني يفصل الإضاءة عن اللون)
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    
+    # 2. إنشاء كائن CLAHE
+    clahe = cv2.createCLAHE(
+        clipLimit=clip,           # حد القص (منع التباين الزائد)
+        tileGridSize=(grid, grid) # حجم المربعات (8×8)
+    )
+    
+    # 3. تطبيق CLAHE فقط على قناة L (الإضاءة)
+    l2 = clahe.apply(l)
+    
+    # 4. إعادة دمج القنوات
+    lab2 = cv2.merge([l2, a, b])
+    return cv2.cvtColor(lab2, cv2.COLOR_LAB2BGR)
+```
+
+#### المعاملات:
+
+- **clipLimit** (2.0 - 4.0):
+  - قيم منخفضة → تباين أقل، نتيجة طبيعية
+  - قيم عالية → تباين أكثر، قد تبدو غير طبيعية
+  
+- **tileGridSize** ( 8×8 أو 16×16):
+  - شبكة صغيرة → تكيف محلي أكثر
+  - شبكة كبيرة → تكيف عام أكثر
+
+#### الفوائد:
+- **تحسين هائل** في الصور ذات الإضاءة غير المتساوية
+- **تبرز الزوايا الخفية** في المناطق الداكنة
+- **يحافظ على الألوان** (a, b لا تتغير)
+
+#### العيوب:
+- **قد يبرز الضوضاء** في المناطق المسطحة
+- **بطيء قليلاً** مع صور عالية الدقة
+
+---
+
+### استخدامهما معاً:
+
+```python
+# من detect_corners.py
+if args.use_gamma:
+    img = adaptive_gamma(img)      # الخطوة 1: تصحيح الإضاءة العامة
+
+if args.use_clahe:
+    img = apply_clahe_rgb(img, ...)  # الخطوة 2: تحسين التباين المحلي
+```
+
+**التسلسل مهم**:
+1. Gamma أولاً → يصحح السطوع العام
+2. CLAHE ثانياً → يحسن التفاصيل المحلية
+
+---
+
+## شرح الكود التفصيلي
+
+### 📁 ملف `corners.py`
+
+هذا الملف يحتوي على **الدوال الأساسية** لتطبيق الخوارزميات.
+
+#### 1. الدوال المساعدة (Helpers)
+
+##### `_to_uint8(img)`
+```python
+def _to_uint8(img):
+    norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX)
+    return norm.astype(np.uint8)
+```
+
+**الهدف**: تحويل أي صورة (float32, float64) إلى نطاق 0-255
+
+**الاستخدام**: 
+- استجابة Harris تأتي بقيم float
+- نحتاج تحويلها إلى uint8 لتطبيق colormap
+
+**مثال**:
+```python
+# قبل
+harris_response = array([[0.0001, 0.5, 0.9], ...])  # قيم float
+
+# بعد
+harris_u8 = array([[0, 127, 255], ...])  # قيم 0-255
+```
+
+---
+
+##### `_title_bar(img, title, h=40, ...)`
+```python
+def _title_bar(img, title, h=40, bg=(24,24,24), fg=(255,255,255)):
+    bar = np.full((h, img.shape[1], 3), bg, dtype=np.uint8)
+    cv2.putText(bar, title, (12, int(h*0.7)), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, fg, 2, cv2.LINE_AA)
+    return np.vstack([bar, img])
+```
+
+**الهدف**: إضافة شريط عنوان أعلى الصورة
+
+**الخطوات**:
+1. إنشاء مستطيل بلون خلفية داكن
+2. كتابة النص عليه
+3. لصقه فوق الصورة بـ `vstack`
+
+**مثال على الإخراج**:
+```
+┌─────────────────────────┐
+│ Harris • Overlay        │ ← شريط العنوان
+├─────────────────────────┤
+│                         │
+│      الصورة             │
+│                         │
+└─────────────────────────┘
+```
+
+---
+
+#### 2. دالة Harris Corner Detection
+
+```python
+def harris_corners(
+        image,
+        block_size=3,
+        ksize=3,
+        k=0.04,
+        thresh=0.01,
+        dilate_iter=1,
+        colormap=cv2.COLORMAP_TURBO
+    ):
+```
+
+**شرح المعاملات**:
+
+- `block_size=20`:
+  - حجم النافذة المحيطة بالبكسل لحساب المصفوفة M
+  - قيمة أكبر → زوايا أقل لكن أكثر ثباتاً
+  - **الافتراضي في الكود: 20** (أكبر من المعتاد)
+
+- `ksize=3`:
+  - حجم فلتر Sobel للمشتقات
+  - القيم المسموحة: 1, 3, 5, 7
+  - **الافتراضي: 3**
+
+- `k=0.04`:
+  - ثابت Harris في المعادلة
+  - نطاق نموذجي: 0.04 - 0.06
+  - قيمة أصغر → حساسية أكبر
+
+- `thresh=0.01`:
+  - نسبة العتبة من أقصى استجابة
+  - 0.01 = نقبل أي نقطة قيمتها > 1% من الأقصى
+  - قيمة أعلى → زوايا أقل لكن أقوى
+
+- `dilate_iter=1`:
+  - عدد تكرارات التوسيع
+  - يجعل الزوايا **أكثر بروزاً**
+  - 0 = بدون توسيع
+
+**خطوات التنفيذ**:
+
+```python
+# 1. نسخ الصورة
+img = image.copy()
+
+# 2. تحويل إلى Grayscale
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+# 3. تطبيق CLAHE لتحسين التباين
+clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+gray = clahe.apply(gray)
+
+# 4. تحويل إلى float32 (متطلب cornerHarris)
+gray_f32 = np.float32(gray)
+
+# 5. تطبيق Harris
+dst = cv2.cornerHarris(gray_f32, block_size, ksize, k)
+
+# 6. توسيع النقاط (اختياري)
+if dilate_iter > 0:
+    dst = cv2.dilate(dst, None, iterations=dilate_iter)
+
+# 7. إنشاء mask للزوايا القوية
+mask = dst > (thresh * dst.max())
+
+# 8. إنشاء heatmap ملون
+heat_u8 = _to_uint8(dst)
+heat_colored = cv2.applyColorMap(heat_u8, colormap)
+
+# 9. دمج الصورة الأصلية مع heatmap
+overlay = cv2.addWeighted(img, 0.7, heat_colored, 0.3, 0.0)
+overlay[mask] = (0, 255, 255)  # تلوين الزوايا بالأصفر
+
+# 10. إنشاء صورة silhouette
+silhouette = np.zeros_like(img)
+silhouette[mask] = (255, 255, 255)
+
+return overlay, heat_colored, silhouette
+```
+
+**المخرجات**:
+
+1. **overlay**: صورة ملونة + نقاط صفراء على الزوايا
+2. **heat_colored**: خريطة حرارية تُظهر شدة الاستجابة
+3. **silhouette**: خلفية سوداء + نقاط بيضاء (الزوايا فقط)
+
+---
+
+#### 3. دالة Shi-Tomasi
+
+```python
+def shi_tomasi(
+        image,
+        max_corners=600,
+        quality_level=0.01,
+        min_distance=10,
+        block_size=3,
+        radius=3,
+        color=(0,255,255)
+    ):
+```
+
+**شرح المعاملات**:
+
+- `max_corners=700`:
+  - أقصى عدد زوايا نريد اكتشافها
+  - **الافتراضي في الكود: 700**
+
+- `quality_level=0.01`:
+  - جودة أقل زاوية مقبولة
+  - 0.01 = نقبل زوايا بجودة >= 1% من أفضل زاوية
+  - قيمة أعلى → زوايا أقل لكن أفضل
+
+- `min_distance=10`:
+  - أقل مسافة (بالبكسل) بين زاويتين
+  - يمنع تجمع النقاط في منطقة واحدة
+
+- `block_size=4`:
+  - حجم النافذة لحساب مصفوفة الكوفارينس
+  - **الافتراضي في الكود: 4** (أصغر من Harris)
+
+- `radius=10`:
+  - نصف قطر الدائرة المرسومة على كل زاوية
+  - **الافتراضي: 10 بكسل**
+
+**خطوات التنفيذ**:
+
+```python
+# 1. نسخ الصورة
+img = image.copy()
+
+# 2. تحويل إلى Grayscale
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+# 3. تطبيق CLAHE (مهم جداً!)
+clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+gray = clahe.apply(gray)
+
+# 4. اكتشاف الزوايا
+pts = cv2.goodFeaturesToTrack(
+    gray,
+    maxCorners=max_corners,
+    qualityLevel=quality_level,
+    minDistance=min_distance,
+    blockSize=block_size,
+    useHarrisDetector=False  # ← مهم! False = Shi-Tomasi
+)
+
+# 5. إنشاء silhouette
+silhouette = np.zeros_like(img)
+
+# 6. رسم الزوايا
+if pts is not None:
+    pts = np.intp(pts)  # تحويل إلى integer
+    for p in pts:
+        x, y = int(p[0][0]), int(p[0][1])
+        cv2.circle(img, (x, y), radius, color, -1, cv2.LINE_AA)
+        cv2.circle(silhouette, (x, y), radius, (255,255,255), -1, cv2.LINE_AA)
+
+return img, silhouette
+```
+
+**الفرق عن Harris**:
+- لا توجد heatmap
+- فقط **نقاط منفصلة**
+- أسرع في التنفيذ
+
+---
+
+### 📁 ملف `detect_corners.py`
+
+هذا الملف هو **البرنامج الرئيسي** الذي يستخدم الدوال من `corners.py`.
+
+#### 1. دوال تحسين الإضاءة
+
+تم شرحها بالتفصيل في قسم [تحسينات الإضاءة](#تحسينات-الإضاءة).
+
+---
+
+#### 2. دوال ترتيب الصور
+
+##### `resize_exact(img, w=480, h=360)`
+```python
+def resize_exact(img, w=480, h=360):
+    return cv2.resize(img, (w, h), interpolation=cv2.INTER_AREA)
+```
+
+**الهدف**: تغيير حجم الصورة لحجم ثابت
+
+**INTER_AREA**:
+- أفضل interpolation للتصغير
+- يحافظ على الحدة
+- أسرع من INTER_CUBIC
+
+---
+
+##### `pad(img, px=8, color=(30,30,30))`
+```python
+def pad(img, px=8, color=(30,30,30)):
+    return cv2.copyMakeBorder(
+        img, px, px, px, px,
+        cv2.BORDER_CONSTANT,
+        value=color
+    )
+```
+
+**الهدف**: إضافة إطار حول الصورة
+
+**الاستخدام**: فصل الصور في الشبكة 2×2
+
+---
+
+##### `grid2x2(a, b, c, d, ...)`
+```python
+def grid2x2(a, b, c, d, tile_w=480, tile_h=360, pad_px=8, bg=(30,30,30)):
+    # تغيير حجم وإضافة إطار
+    a = pad(resize_exact(a, tile_w, tile_h), pad_px, bg)
+    b = pad(resize_exact(b, tile_w, tile_h), pad_px, bg)
+    c = pad(resize_exact(c, tile_w, tile_h), pad_px, bg)
+    d = pad(resize_exact(d, tile_w, tile_h), pad_px, bg)
+    
+    # لصق أفقي
+    top = cv2.hconcat([a, b])
+    bottom = cv2.hconcat([c, d])
+    
+    # لصق عمودي
+    return cv2.vconcat([top, bottom])
+```
+
+**النتيجة**:
+```
+┌─────────┬─────────┐
+│    A    │    B    │
+├─────────┼─────────┤
+│    C    │    D    │
+└─────────┴─────────┘
+```
+
+---
+
+#### 3. دالة المعالجة الرئيسية
+
+```python
+def process_image(img, args):
+    # 1. Adaptive Gamma (اختياري)
+    if args.use_gamma:
+        img = adaptive_gamma(img)
+    
+    # 2. CLAHE (اختياري)
+    if args.use_clahe:
+        img = apply_clahe_rgb(img, clip=args.clahe_clip, grid=args.clahe_grid)
+    
+    # 3. تطبيق Harris
+    h_overlay, h_heat, _h_sil = harris_corners(img, ...)
+    
+    # 4. تطبيق Shi-Tomasi
+    s_overlay, s_sil = shi_tomasi(img, ...)
+    
+    # 5. إضافة عناوين
+    p1 = titled(h_overlay, "Harris • Overlay")
+    p2 = titled(h_heat,   "Harris • Heatmap")
+    p3 = titled(s_overlay,"Shi–Tomasi • Overlay")
+    p4 = titled(s_sil,    "Shi–Tomasi • Silhouette")
+    
+    # 6. تجميع في شبكة 2×2
+    panel = grid2x2(p1, p2, p3, p4, ...)
+    
+    return panel
+```
+
+**المخرج النهائي**:
+```
+┌──────────────────────┬──────────────────────┐
+│  Harris • Overlay    │  Harris • Heatmap    │
+│  (صورة + زوايا)      │  (خريطة حرارية)      │
+├──────────────────────┼──────────────────────┤
+│ Shi–Tomasi • Overlay │ Shi–Tomasi • Silh... │
+│  (صورة + دوائر)      │  (نقاط بيضاء فقط)    │
+└──────────────────────┴──────────────────────┘
+```
+
+---
+
+#### 4. أوضاع التشغيل
+
+##### وضع صورة واحدة
+```python
+def run_single(path, args):
+    img = cv2.imread(path)
+    panel = process_image(img, args)
+    cv2.imshow("Corners Dashboard", panel)
+    key = cv2.waitKey(0) & 0xFF
+    if args.save or key == ord('s'):
+        save_panel(panel, args.output, ...)
+    cv2.destroyAllWindows()
+```
+
+**الاستخدام**:
+```bash
+python detect_corners.py --input_type 0 --img_path "photo.jpg"
+```
+
+---
+
+##### وضع الكاميرا
+```python
+def run_camera(cam_idx, args):
+    cap = cv2.VideoCapture(cam_idx)
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        panel = process_image(frame, args)
+        cv2.imshow("Corners Dashboard", panel)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+```
+
+**الاستخدام**:
+```bash
+python detect_corners.py --input_type 1 --camera 0
+```
+
+---
+
+##### وضع مجلد
+```python
+def run_folder(folder, args):
+    exts = ("*.png", "*.jpg", "*.jpeg", "*.bmp")
+    files = []
+    for e in exts:
+        files.extend(glob.glob(os.path.join(folder, e)))
+    files.sort()
+    for p in files:
+        img = cv2.imread(p)
+        panel = process_image(img, args)
+        cv2.imshow("Corners Dashboard", panel)
+        key = cv2.waitKey(1) & 0xFF
+        if args.save or key == ord('s'):
+            save_panel(panel, args.output, ...)
+        if key == ord('q'):
+            break
+    cv2.destroyAllWindows()
+```
+
+**الاستخدام**:
+```bash
+python detect_corners.py --input_type 2 --folder_path "imges"
+```
+
+---
+
+#### 5. معاملات سطر الأوامر
+
+```python
+def parse_args():
+    ap = argparse.ArgumentParser()
+    
+    # الإدخال
+    ap.add_argument("--input_type", type=int, default=0)  # 0=صورة, 1=كاميرا, 2=مجلد
+    ap.add_argument("--img_path", type=str, default="")
+    ap.add_argument("--camera", type=int, default=0)
+    ap.add_argument("--folder_path", type=str, default="imges")
+    ap.add_argument("--save", type=lambda x: str(x).lower()=="true", default=False)
+    ap.add_argument("--output", type=str, default="output")
+    
+    # حجم اللوحة
+    ap.add_argument("--tile_w", type=int, default=480)
+    ap.add_argument("--tile_h", type=int, default=360)
+    ap.add_argument("--pad", type=int, default=8)
+    
+    # تحسين الإضاءة
+    ap.add_argument("--use_gamma", type=lambda x: str(x).lower()=="true", default=True)
+    ap.add_argument("--use_clahe", type=lambda x: str(x).lower()=="true", default=True)
+    ap.add_argument("--clahe_clip", type=float, default=3.0)
+    ap.add_argument("--clahe_grid", type=int, default=8)
+    
+    # Harris
+    ap.add_argument("--h_block", type=int, default=20)
+    ap.add_argument("--h_ksize", type=int, default=3)
+    ap.add_argument("--h_k", type=float, default=0.04)
+    ap.add_argument("--h_thresh", type=float, default=0.01)
+    ap.add_argument("--h_dilate", type=int, default=1)
+    ap.add_argument("--h_colormap", type=int, default=cv2.COLORMAP_TURBO)
+    
+    # Shi-Tomasi
+    ap.add_argument("--s_max", type=int, default=700)
+    ap.add_argument("--s_q", type=float, default=0.01)
+    ap.add_argument("--s_min", type=int, default=10)
+    ap.add_argument("--s_block", type=int, default=4)
+    ap.add_argument("--s_radius", type=int, default=10)
+    
+    return ap.parse_args()
+```
+
+**أمثلة على الاستخدام**:
+
+```bash
+# صورة واحدة مع حفظ
+python detect_corners.py \
+  --input_type 0 \
+  --img_path "test.jpg" \
+  --save True
+
+# كاميرا بدون Gamma
+python detect_corners.py \
+  --input_type 1 \
+  --use_gamma False
+
+# مجلد مع Harris حساس جداً
+python detect_corners.py \
+  --input_type 2 \
+  --folder_path "imges5" \
+  --h_thresh 0.005 \
+  --h_block 15
+```
+
+---
+
+## الخلاصة والتوصيات
+
+### ✅ نقاط القوة في الكود
+
+1. **شامل**: يجمع خوارزميتين مختلفتين في أداة واحدة
+2. **مرن**: معاملات قابلة للتخصيص بالكامل
+3. **احترافي**: تحسينات الإضاءة (Gamma + CLAHE) مدمجة
+4. **تفاعلي**: يدعم الكاميرا الحية + معالجة دفعية
+5. **مرئي**: عرض 4 نتائج مختلفة في لوحة واحدة
+
+### ⚠️ نقاط التحسين المقترحة
+
+1. **التحقق من نوع الصورة**:
+   ```python
+   # إضافة في بداية harris_corners و shi_tomasi
+   if len(image.shape) == 2:
+       gray = image
+       img = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+   else:
+       img = image.copy()
+       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+   ```
+
+2. **معالجة الأخطاء**:
+   ```python
+   # في run_single
+   if not os.path.exists(path):
+       print(f"Error: File not found {path}")
+       return
+   
+   img = cv2.imread(path)
+   if img is None:
+       print(f"Error: Cannot read image {path}")
+       return
+   ```
+
+3. **تحسين الأداء**:
+   ```python
+   # استخدام threading لمعالجة دفعية أسرع
+   from concurrent.futures import ThreadPoolExecutor
+   
+   def process_batch(files, args):
+       with ThreadPoolExecutor(max_workers=4) as executor:
+           results = executor.map(lambda f: process_image(cv2.imread(f), args), files)
+       return list(results)
+   ```
+
+4. **إضافة خوارزميات أخرى**:
+   - **FAST**: أسرع من Harris/Shi-Tomasi
+   - **ORB**: يجمع كشف + وصف الزوايا
+   - **SIFT**: الأفضل لكن بطيء
+
+5. **GUI بدلاً من argparse**:
+   ```python
+   # استخدام tkinter أو PyQt لواجهة رسومية
+   # تسهيل تعديل المعاملات بشكل تفاعلي
+   ```
+
+### 📊 متى تستخدم هذا النظام؟
+
+#### ✅ مناسب لـ:
+- **البحث الأكاديمي**: مقارنة Harris vs Shi-Tomasi
+- **معايرة الكاميرا**: اكتشاف زوايا لوحة الشطرنج
+- **تتبع الأشياء**: Shi-Tomasi للتتبع
+- **التعليم**: فهم كشف الزوايا بصرياً
+
+#### ❌ غير مناسب لـ:
+- **التطبيقات الفورية**: استخدم FAST أو ORB
+- **الدقة العالية جداً**: استخدم SIFT (لكنه محمي ببراءة اختراع)
+- **الأشكال ثلاثية الأبعاد**: تحتاج خوارزميات أكثر تعقيداً
+
+---
+
+### 🎓 مصادر للتعلم
+
+1. **Papers الأصلية**:
+   - Harris & Stephens (1988): "A Combined Corner and Edge Detector"
+   - Shi & Tomasi (1994): "Good Features to Track"
+
+2. **OpenCV Docs**:
+   - [Feature Detection](https://docs.opencv.org/4.x/d7/d8b/tutorial_py_lucas_kanade.html)
+   - [cornerHarris](https://docs.opencv.org/4.x/dc/d0d/tutorial_py_features_harris.html)
+
+3. **كتب**:
+   - "Computer Vision: Algorithms and Applications" - Szeliski
+   - "Multiple View Geometry" - Hartley & Zisserman
+
+---
+
+**تاريخ التقرير**: 2025-12-02  
+**الإصدار**: 1.0  
+**اللغة**: العربية
